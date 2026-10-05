@@ -10,12 +10,16 @@ function getPending(userId) {
     return null;
   }
 
-  return entry.transactionData;
+  return {
+    type: entry.type || 'TRANSACTION',
+    data: entry.data,
+  };
 }
 
-function setPending(userId, transactionData) {
+function setPending(userId, data, type = 'TRANSACTION') {
   pendingConfirmations.set(userId, {
-    transactionData,
+    data,
+    type,
     expiresAt: Date.now() + CONFIRM_TTL_MS,
   });
 }
