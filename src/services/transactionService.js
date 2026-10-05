@@ -67,6 +67,87 @@ async function getTransactions(lineUserId, dateFrom, dateTo) {
   }
 }
 
+async function deleteLatestTransaction(lineUserId) {
+  try {
+    if (!lineUserId) {
+      return { success: false, reason: 'NO_USER_ID', error: 'Missing line_user_id' };
+    }
+
+    const { data: latest, error: selectError } = await supabase
+      .from(TABLE)
+      .select('id, item, amount, category, type, date')
+      .eq('line_user_id', lineUserId)
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (selectError) {
+      console.error('❌ Supabase Find Latest Error:', selectError.message);
+      return { success: false, reason: 'ERROR', error: selectError.message };
+    }
+
+    if (!latest) {
+      return { success: false, reason: 'NOT_FOUND' };
+    }
+
+    const { error: deleteError } = await supabase
+      .from(TABLE)
+      .delete()
+      .eq('id', latest.id);
+
+    if (deleteError) {
+      console.error('❌ Supabase Delete Error:', deleteError.message);
+      return { success: false, reason: 'ERROR', error: deleteError.message };
+    }
+
+    console.log(`🗑️ ลบรายการ: ${latest.id} | ${latest.item} | ${latest.amount}`);
+    return { success: true, data: latest };
+  } catch (error) {
+    console.error('❌ Supabase Delete Exception:', error.message);
+    return { success: false, reason: 'ERROR', error: error.message };
+  }
+}
+
+async function clearAllTransactions(lineUserId) {
+  try {
+    if (!lineUserId) {
+      return { success: false, reason: 'NO_USER_ID', error: 'Missing line_user_id' };
+    }
+
+    const { error } = await supabase
+      .from(TABLE)
+      .delete()
+      .eq('line_user_id', lineUserId);
+
+    if (error) {
+      console.error('❌ Supabase Clear All Error:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    console.log(`✨ ล้างข้อมูลทั้งหมดของ user: ${lineUserId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Supabase Clear All Exception:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+async function hasTransactions(lineUserId) {
+  try {
+    if (!lineUserId) return false;
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select('id')
+      .eq('line_user_id', lineUserId)
+      .limit(1);
+
+    if (error || !data) return false;
+    return data.length > 0;
+  } catch (error) {
+    return false;
+  }
+}
+
 async function testConnection() {
   try {
     const { error } = await supabase.from(TABLE).select('id').limit(1);
@@ -84,7 +165,11 @@ async function testConnection() {
 
 module.exports = {
   appendTransaction,
+  clearAllTransactions,
+  deleteLatestTransaction,
   getTransactions,
+  hasTransactions,
   supabase,
   testConnection,
 };
+
