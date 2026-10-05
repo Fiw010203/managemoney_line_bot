@@ -231,14 +231,72 @@ function parseSummaryPeriod(text) {
   };
 }
 
+const CLEAR_ALL_CONFIRM_KEYWORD = 'ยืนยันล้างข้อมูลทั้งหมด';
+
+const DELETE_LATEST_KEYWORDS = ['ลบล่าสุด', 'ลบอันล่าสุด', 'ยกเลิกล่าสุด', 'ลบรายการล่าสุด', 'ลบเมื่อกี้'];
+const CLEAR_ALL_KEYWORDS = ['เคลียร์ข้อมูล', 'ล้างข้อมูล', 'เริ่มใหม่', 'ลบประวัติทั้งหมด', 'รีเซ็ตข้อมูล', 'เคลียร์ใหม่'];
+
+function isDeleteLatestRequest(text) {
+  if (!text || typeof text !== 'string') return false;
+  const normalized = text.trim().toLowerCase();
+  return DELETE_LATEST_KEYWORDS.includes(normalized);
+}
+
+function isClearAllRequest(text) {
+  if (!text || typeof text !== 'string') return false;
+  const normalized = text.trim().toLowerCase();
+  return CLEAR_ALL_KEYWORDS.includes(normalized);
+}
+
+function generateDeleteLatestSuccessReply(tx) {
+  return [
+    '🗑️ ลบรายการล่าสุดเรียบร้อยครับ:',
+    `• ${tx.item} ${formatAmount(tx.amount)} บาท (${tx.type})`,
+    `• วันที่: ${tx.date}`,
+  ].join('\n');
+}
+
+function generateClearAllConfirmReply() {
+  return {
+    type: 'text',
+    text: [
+      '⚠️ ต้องการล้างประวัติรายรับ-รายจ่ายทั้งหมดจริงหรือไม่?',
+      '(ข้อมูลทั้งหมดของคุณจะถูกลบถาวรและไม่สามารถกู้คืนได้ครับ)',
+    ].join('\n'),
+    quickReply: {
+      items: [
+        {
+          type: 'action',
+          action: { type: 'message', label: 'ยืนยันล้างข้อมูล ⚠️', text: CLEAR_ALL_CONFIRM_KEYWORD },
+        },
+        {
+          type: 'action',
+          action: { type: 'message', label: 'ยกเลิก ❌', text: 'ยกเลิก' },
+        },
+      ],
+    },
+  };
+}
+
+function generateClearAllSuccessReply() {
+  return '✨ ล้างประวัติทั้งหมดเรียบร้อยแล้วครับ เริ่มต้นบันทึกใหม่ได้เลย!';
+}
+
 module.exports = {
+  CLEAR_ALL_CONFIRM_KEYWORD,
   GENERAL_RESPONSES,
   formatAmount,
   getCategoryComment,
   generateConfirmQuickReply,
   generateMissingFieldReply,
+  generateDeleteLatestSuccessReply,
+  generateClearAllConfirmReply,
+  generateClearAllSuccessReply,
   isAnalysisRequest,
+  isClearAllRequest,
+  isDeleteLatestRequest,
   isGreeting,
   isHelpRequest,
   parseSummaryPeriod,
 };
+
