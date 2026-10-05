@@ -26,6 +26,8 @@ LINE Bot บันทึกรายรับรายจ่าย ด้วย 
 | ขายของได้ 1200 | รายรับ > ขายของ > 1,200 บาท |
 | เมื่อวานค่าน้ำ 300 | รายจ่าย > ค่าน้ำค่าไฟ > วันเมื่อวาน |
 | โอน 500 | ถามยืนยันก่อน เพราะไม่รู้ว่าเงินเข้าหรือออก |
+| ลบล่าสุด / ลบอันล่าสุด | ลบรายการล่าสุดที่เพิ่งบันทึก |
+| เคลียร์ข้อมูล / เริ่มใหม่ | ล้างประวัติทั้งหมดของผู้ใช้ (มีปุ่มกดยืนยันก่อนลบ) |
 
 ## 🚀 การติดตั้ง
 
@@ -80,6 +82,9 @@ CREATE POLICY "Allow all inserts" ON transactions
 
 CREATE POLICY "Allow all selects" ON transactions
   FOR SELECT USING (true);
+
+CREATE POLICY "Allow all deletes" ON transactions
+  FOR DELETE USING (true);
 
 -- (Optional) Index สำหรับ query ตาม user
 CREATE INDEX idx_transactions_user ON transactions (line_user_id);
