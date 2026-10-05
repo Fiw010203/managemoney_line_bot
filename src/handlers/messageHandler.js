@@ -1,12 +1,24 @@
 const { parseExpenseMessage } = require('../services/geminiService');
-const { appendTransaction, getTransactions } = require('../services/transactionService');
 const {
+  appendTransaction,
+  clearAllTransactions,
+  deleteLatestTransaction,
+  getTransactions,
+  hasTransactions,
+} = require('../services/transactionService');
+const {
+  CLEAR_ALL_CONFIRM_KEYWORD,
   GENERAL_RESPONSES,
+  generateClearAllConfirmReply,
+  generateClearAllSuccessReply,
   generateConfirmQuickReply,
+  generateDeleteLatestSuccessReply,
   generateFlexSummary,
   generateMissingFieldReply,
   generateTransactionFlex,
   isAnalysisRequest,
+  isClearAllRequest,
+  isDeleteLatestRequest,
   isGreeting,
   isHelpRequest,
   parseSummaryPeriod,
@@ -31,6 +43,28 @@ async function handleTextMessage(userId, userMessage) {
 
   if (isAnalysisRequest(userMessage)) {
     return buildSummaryReply(userId, userMessage);
+  }
+
+  if (isDeleteLatestRequest(userMessage)) {
+    if (!userId) return GENERAL_RESPONSES.error;
+    const result = await deleteLatestTransaction(userId);
+    if (result.success) {
+      return generateDeleteLatestSuccessReply(result.data);
+    }
+    if (result.reason === 'NOT_FOUND') {
+      return 'ยังไม่มีรายการบันทึกไว้ให้ลบครับ 📭';
+    }
+    return GENERAL_RESPONSES.error;
+  }
+
+  if (isClearAllRequest(userMessage)) {
+    if (!userId) return GENERAL_RESPONSES.error;
+    const hasData = await hasTransactions(userId);
+    if (!hasData) {
+      return 'ยังไม่มีประวัติให้ล้างครับ 📭';
+    }
+    setPending(userId, null, 'CLEAR_ALL');
+    return generateClearAllConfirmReply();
   }
 
   if (userMessage.length < 2) {
@@ -65,11 +99,26 @@ async function handleTextMessage(userId, userMessage) {
 async function handlePendingConfirmation(userId, userMessage) {
   if (!userId) return null;
 
-  const pendingData = getPending(userId);
-  if (!pendingData) return null;
+  const pending = getPending(userId);
+  if (!pending) return null;
 
   const normalizedMessage = userMessage.toLowerCase().trim();
 
+  // Case 1: CLEAR_ALL confirmation
+  if (pending.type === 'CLEAR_ALL') {
+    clearPending(userId);
+    if (normalizedMessage === CLEAR_ALL_CONFIRM_KEYWORD.toLowerCase()) {
+      const result = await clearAllTransactions(userId);
+      if (result.success) {
+        return generateClearAllSuccessReply();
+      }
+      return GENERAL_RESPONSES.error;
+    }
+    return 'ยกเลิกการล้างข้อมูลแล้วครับ';
+  }
+
+  // Case 2: TRANSACTION confirmation
+  const pendingData = pending.data;
   if (CONFIRM_YES.some((word) => normalizedMessage === word)) {
     clearPending(userId);
     return saveAndBuildReply(pendingData, userId);
