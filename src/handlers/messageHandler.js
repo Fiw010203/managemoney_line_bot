@@ -54,6 +54,9 @@ async function handleTextMessage(userId, userMessage) {
     if (result.reason === 'NOT_FOUND') {
       return 'ยังไม่มีรายการบันทึกไว้ให้ลบครับ 📭';
     }
+    if (result.reason === 'POLICY_ERROR') {
+      return '⚠️ ไม่สามารถลบข้อมูลได้ กรุณาเปิดสิทธิ์ DELETE Policy ใน Supabase SQL Editor ก่อนครับ';
+    }
     return GENERAL_RESPONSES.error;
   }
 
@@ -111,6 +114,9 @@ async function handlePendingConfirmation(userId, userMessage) {
       const result = await clearAllTransactions(userId);
       if (result.success) {
         return generateClearAllSuccessReply();
+      }
+      if (result.reason === 'POLICY_ERROR') {
+        return '⚠️ ไม่สามารถล้างข้อมูลได้ กรุณาเปิดสิทธิ์ DELETE Policy ใน Supabase SQL Editor ก่อนครับ';
       }
       return GENERAL_RESPONSES.error;
     }

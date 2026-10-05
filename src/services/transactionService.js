@@ -90,15 +90,21 @@ async function deleteLatestTransaction(lineUserId) {
       return { success: false, reason: 'NOT_FOUND' };
     }
 
-    const { error: deleteError } = await supabase
+    const { data: deletedRows, error: deleteError } = await supabase
       .from(TABLE)
       .delete()
       .eq('id', latest.id)
-      .eq('line_user_id', lineUserId);
+      .eq('line_user_id', lineUserId)
+      .select();
 
     if (deleteError) {
       console.error('❌ Supabase Delete Error:', deleteError.message);
       return { success: false, reason: 'ERROR', error: deleteError.message };
+    }
+
+    if (!deletedRows || deletedRows.length === 0) {
+      console.error('❌ Supabase Delete Warning: 0 rows deleted. Likely missing DELETE RLS policy in Supabase.');
+      return { success: false, reason: 'POLICY_ERROR', error: 'ไม่สามารถลบข้อมูลได้ (ยังไม่ได้เปิด Policy DELETE ใน Supabase)' };
     }
 
     console.log(`🗑️ ลบรายการ: ${latest.id} | ${latest.item} | ${latest.amount}`);
@@ -115,18 +121,24 @@ async function clearAllTransactions(lineUserId) {
       return { success: false, reason: 'NO_USER_ID', error: 'Missing line_user_id' };
     }
 
-    const { error } = await supabase
+    const { data: deletedRows, error } = await supabase
       .from(TABLE)
       .delete()
-      .eq('line_user_id', lineUserId);
+      .eq('line_user_id', lineUserId)
+      .select();
 
     if (error) {
       console.error('❌ Supabase Clear All Error:', error.message);
       return { success: false, reason: 'ERROR', error: error.message };
     }
 
-    console.log(`✨ ล้างข้อมูลทั้งหมดของ user: ${lineUserId}`);
-    return { success: true };
+    if (!deletedRows || deletedRows.length === 0) {
+      console.error('❌ Supabase Clear All Warning: 0 rows deleted. Likely missing DELETE RLS policy in Supabase.');
+      return { success: false, reason: 'POLICY_ERROR', error: 'ไม่สามารถล้างข้อมูลได้ (ยังไม่ได้เปิด Policy DELETE ใน Supabase)' };
+    }
+
+    console.log(`✨ ล้างข้อมูลทั้งหมดของ user: ${lineUserId} (${deletedRows.length} รายการ)`);
+    return { success: true, count: deletedRows.length };
   } catch (error) {
     console.error('❌ Supabase Clear All Exception:', error.message);
     return { success: false, reason: 'ERROR', error: error.message };

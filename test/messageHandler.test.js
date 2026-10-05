@@ -37,9 +37,11 @@ test('handleTextMessage: pending CLEAR_ALL with keyword confirms and clears data
   try {
     supabase.from = () => ({
       delete: () => ({
-        eq: async (col, val) => {
+        eq: (col, val) => {
           if (col === 'line_user_id') deletedUserId = val;
-          return { error: null };
+          return {
+            select: async () => ({ data: [{ id: 1 }], error: null }),
+          };
         },
       }),
     });
@@ -61,12 +63,36 @@ test('handleTextMessage: pending CLEAR_ALL returns error on clearAll failure', a
   try {
     supabase.from = () => ({
       delete: () => ({
-        eq: async () => ({ error: { message: 'Delete error' } }),
+        eq: () => ({
+          select: async () => ({ data: null, error: { message: 'Delete error' } }),
+        }),
       }),
     });
 
     const reply = await handleTextMessage(userId, CLEAR_ALL_CONFIRM_KEYWORD);
     assert.equal(reply, GENERAL_RESPONSES.error);
+    assert.equal(getPending(userId), null);
+  } finally {
+    supabase.from = originalFrom;
+  }
+});
+
+test('handleTextMessage: pending CLEAR_ALL returns policy notice on POLICY_ERROR', async () => {
+  const userId = 'user_handler_test_3_policy';
+  setPending(userId, null, 'CLEAR_ALL');
+
+  const originalFrom = supabase.from;
+  try {
+    supabase.from = () => ({
+      delete: () => ({
+        eq: () => ({
+          select: async () => ({ data: [], error: null }),
+        }),
+      }),
+    });
+
+    const reply = await handleTextMessage(userId, CLEAR_ALL_CONFIRM_KEYWORD);
+    assert.match(reply, /DELETE Policy/);
     assert.equal(getPending(userId), null);
   } finally {
     supabase.from = originalFrom;
@@ -98,7 +124,9 @@ test('handleTextMessage: triggers deleteLatestTransaction on isDeleteLatestReque
       }),
       delete: () => ({
         eq: () => ({
-          eq: async () => ({ error: null }),
+          eq: () => ({
+            select: async () => ({ data: [fakeRow], error: null }),
+          }),
         }),
       }),
     });
@@ -106,6 +134,45 @@ test('handleTextMessage: triggers deleteLatestTransaction on isDeleteLatestReque
     const reply = await handleTextMessage(userId, 'ลบล่าสุด');
     assert.match(reply, /ลบรายการล่าสุดเรียบร้อยครับ/);
     assert.match(reply, /กะเพราหมูกรอบ 65 บาท/);
+  } finally {
+    supabase.from = originalFrom;
+  }
+});
+
+test('handleTextMessage: deleteLatestTransaction returns policy notice on POLICY_ERROR', async () => {
+  const userId = 'user_handler_test_4_policy';
+  const originalFrom = supabase.from;
+  try {
+    const fakeRow = {
+      id: 99,
+      item: 'กะเพราหมูกรอบ',
+      amount: 65,
+      category: 'อาหาร',
+      type: 'รายจ่าย',
+      date: '2026-10-05',
+    };
+
+    supabase.from = () => ({
+      select: () => ({
+        eq: () => ({
+          order: () => ({
+            limit: () => ({
+              maybeSingle: async () => ({ data: fakeRow, error: null }),
+            }),
+          }),
+        }),
+      }),
+      delete: () => ({
+        eq: () => ({
+          eq: () => ({
+            select: async () => ({ data: [], error: null }),
+          }),
+        }),
+      }),
+    });
+
+    const reply = await handleTextMessage(userId, 'ลบล่าสุด');
+    assert.match(reply, /DELETE Policy/);
   } finally {
     supabase.from = originalFrom;
   }

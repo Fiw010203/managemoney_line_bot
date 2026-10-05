@@ -64,7 +64,7 @@ test('deleteLatestTransaction: deletes scoped by id and line_user_id when found'
             deleteFilters.push([col, val]);
             return query;
           },
-          then: (resolve) => resolve({ error: null }),
+          select: async () => ({ data: [fakeRow], error: null }),
         };
         return query;
       },
@@ -98,7 +98,9 @@ test('deleteLatestTransaction: returns ERROR on delete error', async () => {
       }),
       delete: () => ({
         eq: () => ({
-          eq: async () => ({ error: { message: 'Database delete failed' } }),
+          eq: () => ({
+            select: async () => ({ data: null, error: { message: 'Database delete failed' } }),
+          }),
         }),
       }),
     });
@@ -107,6 +109,37 @@ test('deleteLatestTransaction: returns ERROR on delete error', async () => {
     assert.equal(result.success, false);
     assert.equal(result.reason, 'ERROR');
     assert.equal(result.error, 'Database delete failed');
+  } finally {
+    supabase.from = originalFrom;
+  }
+});
+
+test('deleteLatestTransaction: returns POLICY_ERROR when 0 rows deleted', async () => {
+  const originalFrom = supabase.from;
+  try {
+    const fakeRow = { id: 42, item: 'Coffee', amount: 60 };
+    supabase.from = () => ({
+      select: () => ({
+        eq: () => ({
+          order: () => ({
+            limit: () => ({
+              maybeSingle: async () => ({ data: fakeRow, error: null }),
+            }),
+          }),
+        }),
+      }),
+      delete: () => ({
+        eq: () => ({
+          eq: () => ({
+            select: async () => ({ data: [], error: null }),
+          }),
+        }),
+      }),
+    });
+
+    const result = await deleteLatestTransaction('U1234');
+    assert.equal(result.success, false);
+    assert.equal(result.reason, 'POLICY_ERROR');
   } finally {
     supabase.from = originalFrom;
   }
@@ -124,15 +157,17 @@ test('clearAllTransactions: successfully deletes all transactions for lineUserId
   try {
     supabase.from = () => ({
       delete: () => ({
-        eq: async (col, val) => {
+        eq: (col, val) => {
           deleteFilters.push([col, val]);
-          return { error: null };
+          return {
+            select: async () => ({ data: [{ id: 1 }, { id: 2 }], error: null }),
+          };
         },
       }),
     });
 
     const result = await clearAllTransactions('U1234');
-    assert.deepEqual(result, { success: true });
+    assert.deepEqual(result, { success: true, count: 2 });
     assert.deepEqual(deleteFilters, [['line_user_id', 'U1234']]);
   } finally {
     supabase.from = originalFrom;
@@ -144,7 +179,9 @@ test('clearAllTransactions: returns reason ERROR on Supabase error', async () =>
   try {
     supabase.from = () => ({
       delete: () => ({
-        eq: async () => ({ error: { message: 'Network error' } }),
+        eq: () => ({
+          select: async () => ({ data: null, error: { message: 'Network error' } }),
+        }),
       }),
     });
 
@@ -152,6 +189,25 @@ test('clearAllTransactions: returns reason ERROR on Supabase error', async () =>
     assert.equal(result.success, false);
     assert.equal(result.reason, 'ERROR');
     assert.equal(result.error, 'Network error');
+  } finally {
+    supabase.from = originalFrom;
+  }
+});
+
+test('clearAllTransactions: returns reason POLICY_ERROR when 0 rows deleted', async () => {
+  const originalFrom = supabase.from;
+  try {
+    supabase.from = () => ({
+      delete: () => ({
+        eq: () => ({
+          select: async () => ({ data: [], error: null }),
+        }),
+      }),
+    });
+
+    const result = await clearAllTransactions('U1234');
+    assert.equal(result.success, false);
+    assert.equal(result.reason, 'POLICY_ERROR');
   } finally {
     supabase.from = originalFrom;
   }
