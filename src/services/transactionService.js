@@ -93,7 +93,8 @@ async function deleteLatestTransaction(lineUserId) {
     const { error: deleteError } = await supabase
       .from(TABLE)
       .delete()
-      .eq('id', latest.id);
+      .eq('id', latest.id)
+      .eq('line_user_id', lineUserId);
 
     if (deleteError) {
       console.error('❌ Supabase Delete Error:', deleteError.message);
@@ -121,14 +122,14 @@ async function clearAllTransactions(lineUserId) {
 
     if (error) {
       console.error('❌ Supabase Clear All Error:', error.message);
-      return { success: false, error: error.message };
+      return { success: false, reason: 'ERROR', error: error.message };
     }
 
     console.log(`✨ ล้างข้อมูลทั้งหมดของ user: ${lineUserId}`);
     return { success: true };
   } catch (error) {
     console.error('❌ Supabase Clear All Exception:', error.message);
-    return { success: false, error: error.message };
+    return { success: false, reason: 'ERROR', error: error.message };
   }
 }
 
