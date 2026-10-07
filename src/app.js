@@ -7,10 +7,17 @@ function createApp() {
   const app = express();
 
   // LINE SDK verifies the x-line-signature header against the raw request body.
-  // Keep this middleware directly on /webhook and do not add express.json() before it.
-  const lineMiddleware = line.middleware({
-    channelSecret: config.line.channelSecret,
-  });
+  let lineMiddleware;
+  if (config.line.channelSecret) {
+    lineMiddleware = line.middleware({
+      channelSecret: config.line.channelSecret,
+    });
+  } else {
+    lineMiddleware = (req, res) => {
+      console.error('❌ LINE_CHANNEL_SECRET is not configured in environment variables');
+      res.status(500).json({ error: 'LINE_CHANNEL_SECRET is missing' });
+    };
+  }
 
   app.get('/', (req, res) => {
     res.json({
