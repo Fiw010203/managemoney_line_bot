@@ -314,3 +314,69 @@ test('handleTextMessage: pending TRANSACTION confirmation with unrelated text cl
   assert.equal(reply, GENERAL_RESPONSES.greeting);
   assert.equal(getPending(userId), null);
 });
+
+test('handleTextMessage: triggers buildTransactionListReply on isTransactionListRequest with transactions', async () => {
+  const userId = 'user_handler_test_list';
+  const originalFrom = supabase.from;
+  try {
+    const fakeRows = [
+      {
+        id: 1,
+        item: 'ก๋วยเตี๋ยว',
+        amount: 50,
+        category: 'อาหาร',
+        type: 'รายจ่าย',
+        date: '2026-10-07',
+      },
+    ];
+
+    supabase.from = () => {
+      const q = {
+        select: () => q,
+        eq: () => q,
+        gte: () => q,
+        lte: () => q,
+        order: () => q,
+        limit: () => q,
+      };
+      q.then = (resolve) => resolve({ data: fakeRows, error: null });
+      return q;
+    };
+
+    const reply = await handleTextMessage(userId, 'ดูรายการ');
+    assert.equal(reply.type, 'flex');
+    assert.match(reply.altText, /รายการรายรับ-รายจ่าย/);
+    assert.match(reply.altText, /1 รายการ/);
+  } finally {
+    supabase.from = originalFrom;
+  }
+});
+
+test('handleTextMessage: isTransactionListRequest returns empty message when no records', async () => {
+  const userId = 'user_handler_test_list_empty';
+  const originalFrom = supabase.from;
+  try {
+    supabase.from = () => {
+      const q = {
+        select: () => q,
+        eq: () => q,
+        gte: () => q,
+        lte: () => q,
+        order: () => q,
+        limit: () => q,
+      };
+      q.then = (resolve) => resolve({ data: [], error: null });
+      return q;
+    };
+
+    const reply = await handleTextMessage(userId, 'ดูรายการ');
+    assert.match(reply, /ยังไม่มีรายการบันทึกไว้/);
+  } finally {
+    supabase.from = originalFrom;
+  }
+});
+
+test('handleTextMessage: isTransactionListRequest returns error when userId is missing', async () => {
+  const reply = await handleTextMessage(null, 'ดูรายการ');
+  assert.equal(reply, GENERAL_RESPONSES.error);
+});

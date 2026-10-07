@@ -14,6 +14,7 @@ const {
   generateConfirmQuickReply,
   generateDeleteLatestSuccessReply,
   generateFlexSummary,
+  generateFlexTransactionList,
   generateMissingFieldReply,
   generateTransactionFlex,
   isAnalysisRequest,
@@ -21,7 +22,9 @@ const {
   isDeleteLatestRequest,
   isGreeting,
   isHelpRequest,
+  isTransactionListRequest,
   parseSummaryPeriod,
+  parseTransactionListPeriod,
 } = require('../messages');
 const { shouldAutoSaveTransaction } = require('../utils/transactionRules');
 const { clearPending, getPending, setPending } = require('../state/pendingConfirmations');
@@ -39,10 +42,6 @@ async function handleTextMessage(userId, userMessage) {
 
   if (isHelpRequest(userMessage)) {
     return GENERAL_RESPONSES.help;
-  }
-
-  if (isAnalysisRequest(userMessage)) {
-    return buildSummaryReply(userId, userMessage);
   }
 
   if (isDeleteLatestRequest(userMessage)) {
@@ -68,6 +67,15 @@ async function handleTextMessage(userId, userMessage) {
     }
     setPending(userId, null, 'CLEAR_ALL');
     return generateClearAllConfirmReply();
+  }
+
+  if (isTransactionListRequest(userMessage)) {
+    if (!userId) return GENERAL_RESPONSES.error;
+    return buildTransactionListReply(userId, userMessage);
+  }
+
+  if (isAnalysisRequest(userMessage)) {
+    return buildSummaryReply(userId, userMessage);
   }
 
   if (userMessage.length < 2) {
@@ -150,6 +158,27 @@ async function buildSummaryReply(userId, userMessage) {
     return generateFlexSummary(rows, label) || GENERAL_RESPONSES.noData;
   } catch (error) {
     console.error('❌ Analysis error:', error);
+    return GENERAL_RESPONSES.error;
+  }
+}
+
+async function buildTransactionListReply(userId, userMessage) {
+  try {
+    const { dateFrom, dateTo, label } = parseTransactionListPeriod(userMessage);
+    console.log(`📋 ดูรายการ ${label}: ${dateFrom || 'all'} → ${dateTo || 'all'}`);
+
+    const rows = await getTransactions(userId, dateFrom, dateTo, { ascending: false });
+    if (rows === null) return GENERAL_RESPONSES.error;
+
+    if (rows.length === 0) {
+      return label === 'ทั้งหมด'
+        ? 'ยังไม่มีรายการบันทึกไว้เลยครับ 📭\nลองพิมพ์บันทึกได้เลย เช่น "กินข้าว 60" หรือ "เงินเดือน 25000"'
+        : `ยังไม่มีรายการบันทึกไว้สำหรับ${label}ครับ 📭\nลองพิมพ์ "ดูรายการ" เพื่อดูประวัติทั้งหมดได้ครับ`;
+    }
+
+    return generateFlexTransactionList(rows, label);
+  } catch (error) {
+    console.error('❌ Transaction list error:', error);
     return GENERAL_RESPONSES.error;
   }
 }

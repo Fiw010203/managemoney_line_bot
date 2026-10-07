@@ -40,17 +40,30 @@ async function appendTransaction(data, lineUserId = null) {
   }
 }
 
-async function getTransactions(lineUserId, dateFrom, dateTo) {
+async function getTransactions(lineUserId, dateFrom = null, dateTo = null, options = {}) {
   try {
     let query = supabase
       .from(TABLE)
-      .select('item, amount, category, type, date')
-      .gte('date', dateFrom)
-      .lte('date', dateTo)
-      .order('date', { ascending: true });
+      .select('id, item, amount, category, type, date');
 
     if (lineUserId) {
       query = query.eq('line_user_id', lineUserId);
+    }
+
+    if (dateFrom) {
+      query = query.gte('date', dateFrom);
+    }
+
+    if (dateTo) {
+      query = query.lte('date', dateTo);
+    }
+
+    const ascending = options.ascending ?? false;
+    query = query.order('date', { ascending });
+    query = query.order('id', { ascending });
+
+    if (options.limit) {
+      query = query.limit(options.limit);
     }
 
     const { data, error } = await query;

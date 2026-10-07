@@ -88,8 +88,8 @@ const MISSING_FIELD_RESPONSES = {
 const GENERAL_RESPONSES = {
   notText: 'ตอนนี้รับเฉพาะข้อความนะครับ ลองพิมพ์รายรับรายจ่ายมาได้เลย เช่น กินข้าวมันไก่ 80',
   error: 'ขอโทษครับ ระบบสะดุดชั่วคราว ลองใหม่อีกครั้งนะครับ 🙏',
-  greeting: 'สวัสดีครับ! ผมเป็นผู้ช่วยบันทึกรายรับรายจ่าย\n\nพิมพ์ธรรมชาติได้เลย เช่น:\n• กินข้าวมันไก่ 80\n• เงินเดือน 25000\n• ค่าแท็กซี่ 150\n\nถ้าข้อมูลชัดเจน ผมจะบันทึกให้ทันทีครับ',
-  help: 'วิธีใช้งานแบบสั้นมาก:\n\nบันทึกรายการ:\n• กินข้าว 80\n• ค่าแท็กซี่ 150\n• เงินเดือน 25000\n• เมื่อวานค่าน้ำ 300\n\nจัดการรายการ:\n• ลบล่าสุด (ลบรายการที่เพิ่งบันทึกผิด)\n• เคลียร์ข้อมูล / เริ่มใหม่ (ล้างประวัติทั้งหมด)\n\nดูสรุป:\n• สรุป\n• สรุปวันนี้\n• วิเคราะห์สัปดาห์นี้\n• วิเคราะห์เดือนนี้\n\nเคสชัดเจนผมบันทึกให้เลย ถ้ากำกวมจริง ๆ ถึงจะถามยืนยันครับ',
+  greeting: 'สวัสดีครับ! ผมเป็นผู้ช่วยบันทึกรายรับรายจ่าย\n\nพิมพ์ธรรมชาติได้เลย เช่น:\n• กินข้าวมันไก่ 80\n• เงินเดือน 25000\n• ค่าแท็กซี่ 150\n\nหรือพิมพ์ "ดูรายการ" เพื่อดูประวัติรายรับรายจ่ายทั้งหมดได้เลยครับ ✨',
+  help: 'วิธีใช้งานแบบสั้นมาก:\n\nบันทึกรายการ:\n• กินข้าว 80\n• ค่าแท็กซี่ 150\n• เงินเดือน 25000\n• เมื่อวานค่าน้ำ 300\n\nดูรายการ / ประวัติ:\n• ดูรายการ (แสดงรายการทั้งหมด)\n• ดูรายการ วันนี้\n• ดูรายการ เดือนนี้\n\nดูสรุปสถิติ:\n• สรุป\n• สรุปวันนี้\n• วิเคราะห์สัปดาห์นี้\n• วิเคราะห์เดือนนี้\n\nจัดการรายการ:\n• ลบล่าสุด (ลบรายการที่เพิ่งบันทึกผิด)\n• เคลียร์ข้อมูล / เริ่มใหม่ (ล้างประวัติทั้งหมด)\n\nเคสชัดเจนผมบันทึกให้เลย ถ้ากำกวมจริง ๆ ถึงจะถามยืนยันครับ',
   noData: 'ยังไม่มีรายการในช่วงนี้เลยครับ ลองบันทึกรายรับรายจ่ายก่อน แล้วค่อยเรียกสรุปได้เลย 📭',
 };
 
@@ -163,8 +163,132 @@ function isHelpRequest(text) {
 }
 
 function isAnalysisRequest(text) {
-  const words = ['วิเคราะห์', 'สรุป', 'ดูรายการ', 'รายงาน', 'summary', 'report'];
+  const words = ['วิเคราะห์', 'สรุป', 'รายงาน', 'summary', 'report'];
   return words.some((word) => text.toLowerCase().includes(word));
+}
+
+const TRANSACTION_LIST_EXACT = [
+  'รายการ',
+  'ดูรายการ',
+  'ดูรายการทั้งหมด',
+  'รายการทั้งหมด',
+  'แสดงรายการ',
+  'แสดงรายการทั้งหมด',
+  'ประวัติ',
+  'ดูประวัติ',
+  'ประวัติรายการ',
+  'ประวัติทั้งหมด',
+  'ดูประวัติทั้งหมด',
+  'list',
+  'transactions',
+  'history',
+];
+
+function isTransactionListRequest(text) {
+  if (!text || typeof text !== 'string') return false;
+  const normalized = text.trim().toLowerCase();
+
+  if (isDeleteLatestRequest(normalized) || isClearAllRequest(normalized)) {
+    return false;
+  }
+
+  if (TRANSACTION_LIST_EXACT.includes(normalized)) {
+    return true;
+  }
+
+  if (
+    normalized.startsWith('ดูรายการ') ||
+    normalized.startsWith('แสดงรายการ') ||
+    normalized.startsWith('ดูประวัติ') ||
+    normalized.startsWith('ประวัติรายการ') ||
+    normalized.startsWith('รายการทั้งหมด')
+  ) {
+    return true;
+  }
+
+  if (/^รายการ\s*(วันนี้|เมื่อวาน|สัปดาห์นี้|อาทิตย์นี้|เดือนนี้|เดือนที่แล้ว|เดือน\s*\d{1,2})$/.test(normalized)) {
+    return true;
+  }
+
+  return false;
+}
+
+function parseTransactionListPeriod(text) {
+  if (!text || typeof text !== 'string') {
+    return { dateFrom: null, dateTo: null, label: 'ทั้งหมด' };
+  }
+
+  const now = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth() + 1;
+  const day = now.getUTCDate();
+  const pad = (n) => String(n).padStart(2, '0');
+  const fmt = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`;
+
+  const normalized = text.toLowerCase();
+
+  if (normalized.includes('วันนี้')) {
+    const today = fmt(year, month, day);
+    return { dateFrom: today, dateTo: today, label: 'วันนี้' };
+  }
+
+  if (normalized.includes('เมื่อวาน')) {
+    const yesterday = new Date(now);
+    yesterday.setUTCDate(day - 1);
+    const value = fmt(yesterday.getUTCFullYear(), yesterday.getUTCMonth() + 1, yesterday.getUTCDate());
+    return { dateFrom: value, dateTo: value, label: 'เมื่อวาน' };
+  }
+
+  if (normalized.includes('สัปดาห์นี้') || normalized.includes('อาทิตย์นี้')) {
+    const dayOfWeek = now.getUTCDay();
+    const monday = new Date(now);
+    monday.setUTCDate(day - ((dayOfWeek + 6) % 7));
+    const sunday = new Date(monday);
+    sunday.setUTCDate(monday.getUTCDate() + 6);
+    return {
+      dateFrom: fmt(monday.getUTCFullYear(), monday.getUTCMonth() + 1, monday.getUTCDate()),
+      dateTo: fmt(sunday.getUTCFullYear(), sunday.getUTCMonth() + 1, sunday.getUTCDate()),
+      label: 'สัปดาห์นี้',
+    };
+  }
+
+  if (normalized.includes('เดือนที่แล้ว') || normalized.includes('เดือนก่อน')) {
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear = month === 1 ? year - 1 : year;
+    const lastDay = new Date(prevYear, prevMonth, 0).getDate();
+    return {
+      dateFrom: fmt(prevYear, prevMonth, 1),
+      dateTo: fmt(prevYear, prevMonth, lastDay),
+      label: 'เดือนที่แล้ว',
+    };
+  }
+
+  const monthMatch = normalized.match(/เดือน\s*(\d{1,2})/);
+  if (monthMatch && !normalized.includes('เดือนนี้')) {
+    const targetMonth = parseInt(monthMatch[1], 10);
+    const targetYear = targetMonth > month ? year - 1 : year;
+    const lastDay = new Date(targetYear, targetMonth, 0).getDate();
+    return {
+      dateFrom: fmt(targetYear, targetMonth, 1),
+      dateTo: fmt(targetYear, targetMonth, lastDay),
+      label: `เดือน ${targetMonth}`,
+    };
+  }
+
+  if (normalized.includes('เดือนนี้')) {
+    const lastDay = new Date(year, month, 0).getDate();
+    return {
+      dateFrom: fmt(year, month, 1),
+      dateTo: fmt(year, month, lastDay),
+      label: 'เดือนนี้',
+    };
+  }
+
+  return {
+    dateFrom: null,
+    dateTo: null,
+    label: 'ทั้งหมด',
+  };
 }
 
 function parseSummaryPeriod(text) {
@@ -297,6 +421,8 @@ module.exports = {
   isDeleteLatestRequest,
   isGreeting,
   isHelpRequest,
+  isTransactionListRequest,
   parseSummaryPeriod,
+  parseTransactionListPeriod,
 };
 

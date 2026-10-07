@@ -4,6 +4,7 @@ const {
   deleteLatestTransaction,
   clearAllTransactions,
   hasTransactions,
+  getTransactions,
   supabase,
 } = require('../src/services/transactionService');
 
@@ -235,3 +236,72 @@ test('hasTransactions: returns true when records exist', async () => {
     supabase.from = originalFrom;
   }
 });
+
+test('getTransactions: fetches all records when no date filters provided', async () => {
+  const originalFrom = supabase.from;
+  const calls = [];
+  try {
+    supabase.from = () => {
+      const q = {
+        select: (cols) => { calls.push(['select', cols]); return q; },
+        eq: (col, val) => { calls.push(['eq', col, val]); return q; },
+        order: (col, opts) => { calls.push(['order', col, opts]); return q; },
+        limit: (n) => { calls.push(['limit', n]); return q; },
+      };
+      q.then = (resolve) => resolve({ data: [{ id: 1, item: 'test' }], error: null });
+      return q;
+    };
+
+    const result = await getTransactions('U1234');
+    assert.deepEqual(result, [{ id: 1, item: 'test' }]);
+    assert.ok(calls.some(([method, col, val]) => method === 'eq' && col === 'line_user_id' && val === 'U1234'));
+  } finally {
+    supabase.from = originalFrom;
+  }
+});
+
+test('getTransactions: applies gte and lte when dateFrom and dateTo provided', async () => {
+  const originalFrom = supabase.from;
+  const calls = [];
+  try {
+    supabase.from = () => {
+      const q = {
+        select: (cols) => { calls.push(['select', cols]); return q; },
+        eq: (col, val) => { calls.push(['eq', col, val]); return q; },
+        gte: (col, val) => { calls.push(['gte', col, val]); return q; },
+        lte: (col, val) => { calls.push(['lte', col, val]); return q; },
+        order: (col, opts) => { calls.push(['order', col, opts]); return q; },
+      };
+      q.then = (resolve) => resolve({ data: [], error: null });
+      return q;
+    };
+
+    const result = await getTransactions('U1234', '2026-10-01', '2026-10-07');
+    assert.deepEqual(result, []);
+    assert.ok(calls.some(([method, col, val]) => method === 'gte' && col === 'date' && val === '2026-10-01'));
+    assert.ok(calls.some(([method, col, val]) => method === 'lte' && col === 'date' && val === '2026-10-07'));
+  } finally {
+    supabase.from = originalFrom;
+  }
+});
+
+test('getTransactions: returns null on query error', async () => {
+  const originalFrom = supabase.from;
+  try {
+    supabase.from = () => {
+      const q = {
+        select: () => q,
+        eq: () => q,
+        order: () => q,
+      };
+      q.then = (resolve) => resolve({ data: null, error: { message: 'Database error' } });
+      return q;
+    };
+
+    const result = await getTransactions('U1234');
+    assert.equal(result, null);
+  } finally {
+    supabase.from = originalFrom;
+  }
+});
+
